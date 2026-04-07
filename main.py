@@ -3,7 +3,7 @@ import hmac
 import hashlib
 import base64
 import requests
-from flask import Flask, request, abort
+from flask import Flask, request, abort, jsonify
 
 app = Flask(__name__)
 
@@ -25,6 +25,8 @@ CARD_LABELS = [
     "施設内のアメニティについて",
     "その他",
 ]
+
+RICHMENU_IMAGE_URL = "https://manager.line-scdn.net/0hbWeRe4ZMPXhYKyKwYHVCL3VqJxsoQygwJxUgRyF_PAxrSy0qbElwS3wsakh9HiopN0RxG3h5MRt2HCktNE0mSXluY08hSC9-bUU"
 
 
 def verify_signature(body, signature):
@@ -82,6 +84,86 @@ def reply_message(reply_token, messages):
         "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
     }
     requests.post(url, headers=headers, json={"replyToken": reply_token, "messages": messages})
+
+
+def line_api_headers():
+    return {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+    }
+
+
+@app.route("/setup-richmenu", methods=["GET"])
+def setup_richmenu():
+    """リッチメニューをポストバック付きで作成・設定する"""
+    # 1. 新しいリッチメニューを作成
+    rich_menu = {
+        "size": {"width": 2500, "height": 843},
+        "selected": True,
+        "name": "メニュー",
+        "chatBarText": "予約・お問い合わせはこちら",
+        "areas": [
+            {
+                "bounds": {"x": 0, "y": 0, "width": 833, "height": 843},
+                "action": {
+                    "type": "uri",
+                    "uri": "https://kaiterrace.netlify.app/?openExternalBrowser=1"
+                }
+            },
+            {
+                "bounds": {"x": 833, "y": 0, "width": 834, "height": 843},
+                "action": {
+                    "type": "uri",
+                    "uri": "https://www.instagram.com/kai_terrace_kainan/"
+                }
+            },
+            {
+                "bounds": {"x": 1667, "y": 0, "width": 833, "height": 843},
+                "action": {
+                    "type": "postback",
+                    "data": "action=show_faq",
+                    "displayText": "よくあるご質問"
+                }
+            }
+        ]
+    }
+    r1 = requests.post(
+        "https://api.line.me/v2/bot/richmenu",
+        headers=line_api_headers(),
+        json=rich_menu
+    )
+    if r1.status_code != 200:
+        return jsonify({"error": "create failed", "detail": r1.text}), 500
+
+    rich_menu_id = r1.json().get("richMenuId")
+
+    # 2. 既存の画像をダウンロードして新リッチメニューにアップロード
+    img_resp = requests.get(RICHMENU_IMAGE_URL)
+    if img_resp.status_code == 200:
+        r2 = requests.post(
+            f"https://api-data.line.me/v2/bot/richmenu/{rich_menu_id}/content",
+            headers={
+                "Content-Type": "image/png",
+                "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
+            },
+            data=img_resp.content
+        )
+        if r2.status_code != 200:
+            return jsonify({"error": "image upload failed", "detail": r2.text, "richMenuId": rich_menu_id}), 500
+    else:
+        return jsonify({"error": "image download failed"}), 500
+
+    # 3. デフォルトリッチメニューに設定
+    r3 = requests.post(
+        f"https://api.line.me/v2/bot/user/all/richmenu/{rich_menu_id}",
+        headers=line_api_headers()
+    )
+
+    return jsonify({
+        "success": True,
+        "richMenuId": rich_menu_id,
+        "setDefault": r3.status_code == 200
+    })
 
 
 @app.route("/webhook", methods=["POST"])
