@@ -26,8 +26,6 @@ CARD_LABELS = [
     "その他",
 ]
 
-OLD_RICHMENU_ID = "richmenu-485ceecb45c5462eae1dce2053a55b43"
-
 
 def verify_signature(body, signature):
     h = hmac.new(CHANNEL_SECRET.encode("utf-8"), body, hashlib.sha256).digest()
@@ -93,6 +91,26 @@ def line_api_headers():
     }
 
 
+@app.route("/delete-all-richmenus", methods=["GET"])
+def delete_all_richmenus():
+    r = requests.get(
+        "https://api.line.me/v2/bot/richmenu/list",
+        headers=line_api_headers()
+    )
+    if r.status_code != 200:
+        return jsonify({"error": "list failed", "detail": r.text}), 500
+    richmenus = r.json().get("richmenus", [])
+    deleted = []
+    for menu in richmenus:
+        mid = menu.get("richMenuId")
+        d = requests.delete(
+            f"https://api.line.me/v2/bot/richmenu/{mid}",
+            headers=line_api_headers()
+        )
+        deleted.append({"id": mid, "status": d.status_code})
+    return jsonify({"deleted": deleted})
+
+
 @app.route("/check-richmenu", methods=["GET"])
 def check_richmenu():
     r = requests.get(
@@ -107,81 +125,6 @@ def check_richmenu():
         headers=line_api_headers()
     )
     return jsonify(r2.json())
-
-
-@app.route("/setup-richmenu", methods=["GET"])
-def setup_richmenu():
-    rich_menu = {
-        "size": {"width": 2500, "height": 843},
-        "selected": True,
-        "name": "メニュー",
-        "chatBarText": "予約・お問い合わせはこちら",
-        "areas": [
-            {
-                "bounds": {"x": 0, "y": 0, "width": 833, "height": 843},
-                "action": {
-                    "type": "uri",
-                    "uri": "https://kaiterrace.netlify.app/?openExternalBrowser=1"
-                }
-            },
-            {
-                "bounds": {"x": 833, "y": 0, "width": 834, "height": 843},
-                "action": {
-                    "type": "uri",
-                    "uri": "https://www.instagram.com/kai_terrace_kainan/"
-                }
-            },
-            {
-                "bounds": {"x": 1667, "y": 0, "width": 833, "height": 843},
-                "action": {
-                    "type": "postback",
-                    "data": "action=show_faq",
-                    "displayText": "よくあるご質問"
-                }
-            }
-        ]
-    }
-
-    r1 = requests.post(
-        "https://api.line.me/v2/bot/richmenu",
-        headers=line_api_headers(),
-        json=rich_menu
-    )
-    if r1.status_code != 200:
-        return jsonify({"error": "create failed", "detail": r1.text}), 500
-
-    rich_menu_id = r1.json().get("richMenuId")
-
-    # Copy image from existing richmenu
-    img_resp = requests.get(
-        f"https://api-data.line.me/v2/bot/richmenu/{OLD_RICHMENU_ID}/content",
-        headers={"Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}"}
-    )
-    if img_resp.status_code == 200:
-        content_type = img_resp.headers.get("Content-Type", "image/png")
-        r2 = requests.post(
-            f"https://api-data.line.me/v2/bot/richmenu/{rich_menu_id}/content",
-            headers={
-                "Content-Type": content_type,
-                "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
-            },
-            data=img_resp.content
-        )
-        if r2.status_code != 200:
-            return jsonify({"error": "image upload failed", "detail": r2.text, "richMenuId": rich_menu_id}), 500
-    else:
-        return jsonify({"error": "image copy failed", "detail": img_resp.text, "status": img_resp.status_code}), 500
-
-    r3 = requests.post(
-        f"https://api.line.me/v2/bot/user/all/richmenu/{rich_menu_id}",
-        headers=line_api_headers()
-    )
-
-    return jsonify({
-        "success": True,
-        "richMenuId": rich_menu_id,
-        "setDefault": r3.status_code == 200
-    })
 
 
 @app.route("/webhook", methods=["POST"])
