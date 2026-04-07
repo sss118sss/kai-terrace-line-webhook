@@ -26,7 +26,7 @@ CARD_LABELS = [
     "その他",
 ]
 
-RICHMENU_IMAGE_URL = "https://manager.line-scdn.net/0hbWeRe4ZMPXhYKyKwYHVCL3VqJxsoQygwJxUgRyF_PAxrSy0qbElwS3wsakH9HiopN0RxG3h5MRt2HCktNE0mSXluY08hSC9-bUU"
+OLD_RICHMENU_ID = "richmenu-a06c1e5f42c5045d6ededcac785ace9d"
 
 
 def verify_signature(body, signature):
@@ -151,12 +151,17 @@ def setup_richmenu():
 
     rich_menu_id = r1.json().get("richMenuId")
 
-    img_resp = requests.get(RICHMENU_IMAGE_URL)
+    # Copy image from existing richmenu
+    img_resp = requests.get(
+        f"https://api-data.line.me/v2/bot/richmenu/{OLD_RICHMENU_ID}/content",
+        headers={"Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}"}
+    )
     if img_resp.status_code == 200:
+        content_type = img_resp.headers.get("Content-Type", "image/png")
         r2 = requests.post(
             f"https://api-data.line.me/v2/bot/richmenu/{rich_menu_id}/content",
             headers={
-                "Content-Type": "image/png",
+                "Content-Type": content_type,
                 "Authorization": f"Bearer {CHANNEL_ACCESS_TOKEN}",
             },
             data=img_resp.content
@@ -164,7 +169,7 @@ def setup_richmenu():
         if r2.status_code != 200:
             return jsonify({"error": "image upload failed", "detail": r2.text, "richMenuId": rich_menu_id}), 500
     else:
-        return jsonify({"error": "image download failed"}), 500
+        return jsonify({"error": "image copy failed", "detail": img_resp.text, "status": img_resp.status_code}), 500
 
     r3 = requests.post(
         f"https://api.line.me/v2/bot/user/all/richmenu/{rich_menu_id}",
