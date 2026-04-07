@@ -26,7 +26,7 @@ CARD_LABELS = [
     "その他",
 ]
 
-OLD_RICHMENU_ID = "richmenu-a06c1e5f42c5045d6ededcac785ace9d"
+OLD_RICHMENU_ID = "richmenu-485ceecb45c5462eae1dce2053a55b43"
 
 
 def verify_signature(body, signature):
@@ -135,7 +135,8 @@ def setup_richmenu():
                 "bounds": {"x": 1667, "y": 0, "width": 833, "height": 843},
                 "action": {
                     "type": "postback",
-                    "data": "action=show_faq"
+                    "data": "action=show_faq",
+                    "displayText": "よくあるご質問"
                 }
             }
         ]
